@@ -1,49 +1,59 @@
 package com.example.ordersystem.ordering.service;
 
-import com.example.ordersystem.member.domain.Member;
-import com.example.ordersystem.member.repository.MemberRepository;
 import com.example.ordersystem.ordering.domain.Ordering;
 import com.example.ordersystem.ordering.dto.OrderCreateDto;
+import com.example.ordersystem.ordering.dto.ProductDto;
+import com.example.ordersystem.ordering.dto.ProductUpdateStockDto;
 import com.example.ordersystem.ordering.repository.OrderingRepository;
-import com.example.ordersystem.product.domain.Product;
-import com.example.ordersystem.product.repository.ProductRepository;
-import jakarta.persistence.EntityNotFoundException;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 
 @Service
 @Transactional
 public class OrderingService {
     private final OrderingRepository orderingRepository;
-    private final MemberRepository memberRepository;
-    private final ProductRepository productRepository;
+    private final RestTemplate restTemplate;
 
-    public OrderingService(OrderingRepository orderingRepository, MemberRepository memberRepository, ProductRepository productRepository) {
+    public OrderingService(OrderingRepository orderingRepository, RestTemplate restTemplate) {
         this.orderingRepository = orderingRepository;
-        this.memberRepository = memberRepository;
-        this.productRepository = productRepository;
+        this.restTemplate = restTemplate;
     }
 
-    public Ordering orderCreate(OrderCreateDto orderDto){
-        String id = SecurityContextHolder.getContext().getAuthentication().getName();
-        Member member = memberRepository.findById(Long.parseLong(id)).orElseThrow(()-> new EntityNotFoundException("member is not found"));
+    public Ordering orderCreate(OrderCreateDto orderDto, String userId){
 
-        Product product = productRepository.findById(orderDto.getProductId()).orElseThrow(()->new EntityNotFoundException("product is not found"));
+//        product get 요청
+        String productGetUrl = "http://product-service/product/"+orderDto.getProductId();
+
+        HttpHeaders httpHeaders = new HttpHeaders();
+        httpHeaders.set("X-User-Id", userId);
+        HttpEntity<String> httpEntity = new HttpEntity<>(httpHeaders);
+        ResponseEntity<ProductDto> response = restTemplate.exchange(productGetUrl, HttpMethod.GET,  httpEntity      , ProductDto.class);
+        ProductDto productDto = response.getBody();
         int quantity = orderDto.getProductCount();
-        if(product.getStockQuantity() < quantity){
+        if(productDto.getStockQuantity() < quantity){
             throw new IllegalArgumentException("재고 부족");
         }else {
-            product.updateStockQuantity(orderDto.getProductCount());
+//       product put 요청
+            String productPutUrl = "http://product-service/product/updatestock";
+            httpHeaders.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<?> updateEntity = new HttpEntity<>(
+                ProductUpdateStockDto.builder()
+                        .productId(orderDto.getProductId())
+                        .productQuantity(orderDto.getProductCount())
+                        .build()
+                    , httpHeaders
+            );
+            restTemplate.exchange(productPutUrl, HttpMethod.PUT, updateEntity, Void.class);
         }
         Ordering ordering = Ordering.builder()
-                .member(member)
-                .product(product)
+                .memberId(Long.parseLong(userId))
+                .productId(orderDto.getProductId())
                 .quantity(orderDto.getProductCount())
                 .build();
         orderingRepository.save(ordering);
         return  ordering;
     }
-
 }

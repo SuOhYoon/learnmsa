@@ -1,13 +1,15 @@
 package com.example.ordersystem.ordering.dto;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class OrderCreateDto {
+@Data
+@Builder
+public class ProductUpdateStockDto {
     private Long productId;
-    private Integer productCount;
+    private Integer productQuantity;
 }
