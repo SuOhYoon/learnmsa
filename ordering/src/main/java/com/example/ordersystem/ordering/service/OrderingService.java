@@ -16,10 +16,12 @@ import org.springframework.web.client.RestTemplate;
 public class OrderingService {
     private final OrderingRepository orderingRepository;
     private final RestTemplate restTemplate;
+    private final ProductFeign productFeign;
 
-    public OrderingService(OrderingRepository orderingRepository, RestTemplate restTemplate) {
+    public OrderingService(OrderingRepository orderingRepository, RestTemplate restTemplate, ProductFeign productFeign) {
         this.orderingRepository = orderingRepository;
         this.restTemplate = restTemplate;
+        this.productFeign = productFeign;
     }
 
     public Ordering orderCreate(OrderCreateDto orderDto, String userId){
@@ -55,5 +57,25 @@ public class OrderingService {
                 .build();
         orderingRepository.save(ordering);
         return  ordering;
+    }
+
+    public Ordering orderFeignKafkaCreate(OrderCreateDto orderDto, String userId){
+        ProductDto productDto = productFeign.getProductById(orderDto.getProductId(), userId  );
+        int quantity = orderDto.getProductCount();
+        if(productDto.getStockQuantity() < quantity){
+            throw new IllegalArgumentException("재고 부족");
+        }else {
+            productFeign.updateProductStock(ProductUpdateStockDto.builder()
+                    .productId(orderDto.getProductId())
+                    .productQuantity(orderDto.getProductCount())
+                    .build());
+        }
+        Ordering ordering = Ordering.builder()
+                .memberId(Long.parseLong(userId))
+                .productId(orderDto.getProductId())
+                .quantity(orderDto.getProductCount())
+                .build();
+        orderingRepository.save(ordering);
+        return ordering;
     }
 }
