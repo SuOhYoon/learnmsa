@@ -6,6 +6,7 @@ import com.example.ordersystem.ordering.dto.ProductDto;
 import com.example.ordersystem.ordering.dto.ProductUpdateStockDto;
 import com.example.ordersystem.ordering.repository.OrderingRepository;
 import org.springframework.http.*;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -17,11 +18,13 @@ public class OrderingService {
     private final OrderingRepository orderingRepository;
     private final RestTemplate restTemplate;
     private final ProductFeign productFeign;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    public OrderingService(OrderingRepository orderingRepository, RestTemplate restTemplate, ProductFeign productFeign) {
+    public OrderingService(OrderingRepository orderingRepository, RestTemplate restTemplate, ProductFeign productFeign, KafkaTemplate<String, Object> kafkaTemplate) {
         this.orderingRepository = orderingRepository;
         this.restTemplate = restTemplate;
         this.productFeign = productFeign;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     public Ordering orderCreate(OrderCreateDto orderDto, String userId){
@@ -60,15 +63,20 @@ public class OrderingService {
     }
 
     public Ordering orderFeignKafkaCreate(OrderCreateDto orderDto, String userId){
-        ProductDto productDto = productFeign.getProductById(orderDto.getProductId(), userId  );
+        ProductDto productDto = productFeign.getProductById(orderDto.getProductId(), userId);
         int quantity = orderDto.getProductCount();
         if(productDto.getStockQuantity() < quantity){
             throw new IllegalArgumentException("재고 부족");
         }else {
-            productFeign.updateProductStock(ProductUpdateStockDto.builder()
-                    .productId(orderDto.getProductId())
-                    .productQuantity(orderDto.getProductCount())
-                    .build());
+            ProductUpdateStockDto dto = ProductUpdateStockDto.builder()
+                   .productId(orderDto.getProductId())
+                  .productQuantity(orderDto.getProductCount())
+                  .build();
+//            productFeign.updateProductStock(ProductUpdateStockDto.builder()
+//                    .productId(orderDto.getProductId())
+//                    .productQuantity(orderDto.getProductCount())
+//                    .build());
+            kafkaTemplate.send("update-stock-topic", dto);
         }
         Ordering ordering = Ordering.builder()
                 .memberId(Long.parseLong(userId))

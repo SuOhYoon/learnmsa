@@ -5,7 +5,10 @@ import com.example.ordersystem.product.dto.ProductRegisterDto;
 import com.example.ordersystem.product.dto.ProductResDto;
 import com.example.ordersystem.product.dto.ProductUpdateStockDto;
 import com.example.ordersystem.product.repository.ProductRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,5 +42,17 @@ public class ProductService {
         Product product = productRepository.findById(productUpdateStockDto.getProductId()).orElseThrow(()-> new EntityNotFoundException("없는 상품입니다.."));
         product.updateStockQuantity(productUpdateStockDto.getProductQuantity());
         return product;
+    }
+
+    @KafkaListener(topics = "update-stock-topic", containerFactory = "kafkaListener")
+    public void stockConsumer(String message){
+        ObjectMapper objectMapper = new ObjectMapper();
+        ProductUpdateStockDto dto = null;
+        try {
+            dto = objectMapper.readValue(message, ProductUpdateStockDto.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+        this.updateStockQuantity(dto);
     }
 }
