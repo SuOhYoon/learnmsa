@@ -41,6 +41,8 @@ dependencies {
 
 //   재고감소 비동기처리를 위한 kafka 관련 의존성추가
     implementation 'org.springframework.kafka:spring-kafka'
+//  config 서버 사용을 위한 client 의존성 추가
+    implementation 'org.springframework.cloud:spring-cloud-starter-config'
 }
 
 dependencyManagement {
